@@ -4,6 +4,8 @@
 
 Arachne module wrapping Figwheel, for a smooth CLJS development experience.
 
+Currently is *not* unified with the asset pipeline modules, this is an opportunity for improvement.
+
 ## WARNING
 
 This repository is not yet ready for public consumption. Many key
