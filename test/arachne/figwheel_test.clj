@@ -1,33 +1,48 @@
 (ns arachne.figwheel-test
   (:require [clojure.test :refer :all]
             [arachne.core :as arachne]
+            [arachne.core.config :as cfg]
             [arachne.core.runtime :as rt]
             [arachne.core.dsl :as a]
+            [arachne.assets.dsl :as aa]
             [arachne.figwheel.dsl :as fig]
+            [arachne.figwheel :as afig]
             [arachne.cljs.dsl :as cljs]
             [com.stuartsierra.component :as component]))
 
-(defn test-config
+(defn basic-figwheel-cfg
   "DSL function to build test config"
   []
 
-  (fig/build :test/example-build
-    :id "example"
-    :source-paths ["test"]
-    :figwheel true
-    :build-options {:main 'arachne.figwheel.example,
-                    :asset-path "js/out",
-                    :output-to "test/public/js/example.js",
-                    :output-dir "test/public/js/out",
-                    :source-map-timestamp true})
+  (aa/input-dir :test/src "test")
+  (aa/input-dir :test/public "test/public")
 
   (fig/server :test/figwheel
-    :http-server-root "public"
-    :server-port 3449
-    :open-file-command "emacsclient"
-    :builds [:test/example-build])
+    {:main 'arachne.figwheel.example
+     :output-to "js/example.js"
+     :output-dir "js"
+     :asset-path "js"
+     :optimizations :none
+     :source-map-timestamp true}
+    :port 8888)
+
+  (aa/pipeline [:test/src :test/figwheel #{:src}]
+               [:test/public :test/figwheel #{:public}])
 
   (a/runtime :test/rt [:test/figwheel]))
+
+(deftest ^:integration basic-figwheel
+  (let [cfg (arachne/build-config [:org.arachne-framework/arachne-figwheel]
+              `(basic-figwheel-cfg))
+        rt (atom (rt/init cfg [:arachne/id :test/rt]))]
+    (try
+      (swap! rt component/start)
+
+      (is (re-find #"js/example.js" (slurp "http://localhost:8888/")))
+      (is (re-find #"Hello, world!" (slurp "http://localhost:8888/js/arachne/figwheel/example.js")))
+      (finally
+        (swap! rt component/stop)))))
+
 
 (comment
 
@@ -39,6 +54,8 @@
   (def rt (component/start rt))
 
   (def rt (component/stop rt))
+
+  (afig/repl rt)
 
   )
 
@@ -54,6 +71,16 @@
     (arachne.figwheel/figwheel-cfg-data cfg :test/figwheel))
 
   )
+
+;; Problem
+
+; Three dirs: compile-src, server-base, compile-output
+; compile output can't be in compile output or infinite builds will trigger
+;
+
+; options: multiple discrete inputs
+; options: solve with roles
+
 
 
 
