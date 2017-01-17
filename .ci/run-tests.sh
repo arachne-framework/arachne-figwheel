@@ -4,7 +4,7 @@ set -e
 
 # Run tests
 echo "running tests..."
-boot test -j junit 2>&1
+boot test --all -j junit 2>&1
 
 # Copy junit report
 if [ -z "$CIRCLE_TEST_REPORTS" ]; then
