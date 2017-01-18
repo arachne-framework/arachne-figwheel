@@ -1,0 +1,4 @@
+[{:arachne/name :org.arachne-framework/arachne-figwheel
+  :arachne/schema arachne.figwheel/schema
+  :arachne/configure arachne.figwheel/configure
+  :arachne/dependencies [:org.arachne-framework/arachne-cljs]}]
