@@ -3,7 +3,7 @@
  :description "Figwheel Arachne module"
  :license {"Apache Software License 2.0" "http://www.apache.org/licenses/LICENSE-2.0"}
  :deps [[org.clojure/clojure "1.9.0-alpha14" :scope "provided"]
-        [org.arachne-framework/arachne-cljs "0.1.0-master-0016-24f153d"]
+        [org.arachne-framework/arachne-cljs "0.1.0-master-0018-f5c791f"]
         [figwheel-sidecar "0.5.9-SNAPSHOT" :exclusions [org.clojure/clojurescript
                                                         org.clojure/clojure
                                                         org.clojure/core.async
@@ -23,7 +23,8 @@
                       com.google.guava/guava
                       org.clojure/clojure
                       org.slf4j/jcl-over-slf4j
-                      org.slf4j/jul-to-slf4j]
+                      org.slf4j/jul-to-slf4j
+                      commons-codec]
          :scope "test"]
         [ch.qos.logback/logback-classic "1.1.3" :scope "test"
          :exclusions [org.slf4j/slf4j-api]]]}

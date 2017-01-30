@@ -4,6 +4,7 @@
             [arachne.core.config :as cfg]
             [arachne.core.util :as u]
             [arachne.fileset :as fs]
+            [arachne.assets :as aa]
             [arachne.assets.pipeline :as pipeline]
             [arachne.assets.util :as autil]
             [arachne.cljs.build :as cljs]
@@ -76,27 +77,30 @@
       1 (first chans)
       (pipeline/merge-inputs chans))))
 
+
 (defn build-handler
   "Build a Ring handler function to serve all figwheel resources.
 
   Attempts to load a JS file from the compile directory. Failing that, serve from the public
   fileset handler."
-  [compile-dir public-ch]
-  (let [publics-handler (pipeline/fs-chan-handler public-ch "/")
+  [compile-dir fsview]
+  (let [publics-handler (fn [req]
+                          (aa/ring-response fsview req "/" true))
         compile-handler (file-info/wrap-file-info
                           #(ring-file/file-request % (.getPath compile-dir)))]
     (fn [req]
       (or (compile-handler req) (publics-handler req) nil))))
 
-(defrecord FigwheelServer [figwheel-system]
+(defrecord FigwheelServer [figwheel-system fsview]
   component/Lifecycle
   (start [this]
     (let [inputs (pipeline/input-channels this)
           src-ch (input-by-role this inputs :src)
           public-ch (input-by-role this inputs :public)
+          fsview (component/start (pipeline/map->FSViewComponent {:inputs [public-ch]}))
           src-dir (fs/tmpdir!)
           compile-dir (fs/tmpdir!)
-          handler (build-handler compile-dir public-ch)
+          handler (build-handler compile-dir fsview)
           figwheel-cfg (figwheel-cfg-data this src-dir compile-dir handler)
           figwheel-internal (figwheel-internal-cfg figwheel-cfg)
           figwheel-system (fig/figwheel-system figwheel-internal)]
@@ -107,11 +111,11 @@
           (fs/commit! fs src-dir)
           (recur)))
 
-      (assoc this :figwheel-system (component/start figwheel-system))))
+      (assoc this :figwheel-system (component/start figwheel-system)
+                  :fsview fsview)))
   (stop [this]
-    (assoc this :figwheel-system (component/stop figwheel-system))
-
-    (update this :figwheel-system component/stop)))
+    (assoc this :figwheel-system (component/stop figwheel-system)
+                :fsview (component/stop fsview))))
 
 (defn ctor
   "Constructor for a figwheel server component"
