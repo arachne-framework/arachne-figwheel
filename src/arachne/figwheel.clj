@@ -14,8 +14,8 @@
 
   Note that because this function 'takes over' the primary REPL, it is incompatible with
   nREPL-based Clojure REPLs. If you are in emacs, consider using an inferior-lisp based REPL (such
-  as inf-clojure). If you are in Cursive, consider switching your repl to 'clojure.main in normal
-  JVM process'"
+  as inf-clojure). If you are in Cursive, consider switching your repl to \"clojure.main in normal
+  JVM process\""
   [rt]
   (let [cfg (:config rt)
         figs (cfg/q cfg '[:find [?fig ...]
@@ -27,12 +27,12 @@
       (println "Could not find running figwheel system")
       (fig/cljs-repl sys))))
 
-(defn schema
+(defn ^:no-doc schema
   "Return the schema for the module"
   []
   schema/schema)
 
-(defn configure
+(defn ^:no-doc configure
   "Configure the module"
   [cfg]
   (v/add-validators cfg))

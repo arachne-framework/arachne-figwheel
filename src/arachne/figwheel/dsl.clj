@@ -12,7 +12,8 @@
 (s/def ::port integer?)
 
 (defdsl server
-  "Define a Figwheel server, an component that runs a Figwheel server and is also an asset consumer.
+  "Define a Figwheel server, a component that runs a Figwheel server and is also a consumer in the
+   asset pipeline.
 
   Argumnents are:
 
