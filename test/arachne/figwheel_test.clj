@@ -26,7 +26,6 @@
      :asset-path "js"
      :optimizations :none
      :source-map-timestamp true}
-    :css? true
     :port 8888)
 
   (aa/pipeline [:test/src :test/figwheel #{:src}]
