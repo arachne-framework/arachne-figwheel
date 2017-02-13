@@ -11,6 +11,7 @@
             [com.stuartsierra.component :as component]
             [figwheel-sidecar.system :as fig]
             [figwheel-sidecar.config :as fig-cfg]
+            [figwheel-sidecar.components.figwheel-server :as fig-server]
             [clojure.core.async :as a :refer [go go-loop >! <! <!! >!!]]
             [ring.middleware.file-info :as file-info]
             [ring.middleware.file :as ring-file])
@@ -39,6 +40,13 @@
   (-> cfg-data
     (fig-cfg/->figwheel-config-source)
     (fig-cfg/config-source->prepped-figwheel-internal)))
+
+(defn- figwheel-system
+  "Return an unstarted Figwheel system based on the provided cfg"
+  [entity src-dir compile-dir handler]
+  (-> (figwheel-cfg-data entity src-dir compile-dir handler)
+    (figwheel-internal-cfg)
+    (fig/figwheel-system)))
 
 (deferror ::missing-input
   :message "Input with role `:role` not found for Figwheel Server `:eid` (Arachne ID: `:aid`)"
@@ -77,33 +85,65 @@
       1 (first chans)
       (pipeline/merge-inputs chans))))
 
+;; TODO: make Figwheel a producer
+;; expose compile-dist for consumption
 
-(defn build-handler
-  "Build a Ring handler function to serve all figwheel resources.
+(defn css-changed
+  "Return a transducer that only passes through modified CSS files"
+  []
+  (fn [xf]
+    (let [prev (volatile! nil)]
+      (fn
+        ([] (xf))
+        ([result] (xf result))
+        ([result fs]
+         (let [css-fs (fs/filter fs #(re-matches #".*\.css$" (:path %)))
+               changed-fs (if-let [old @prev]
+                            (fs/changed old css-fs)
+                            css-fs)
+               filenames (set (keys (:tree changed-fs)))]
+           (vreset! prev css-fs)
+           (if (empty? filenames)
+             result
+             (xf result filenames))))))))
 
-  Attempts to load a JS file from the compile directory. Failing that, serve from the public
-  fileset handler."
-  [compile-dir fsview]
-  (let [publics-handler (fn [req]
-                          (aa/ring-response fsview req "/" true))
-        compile-handler (file-info/wrap-file-info
-                          #(ring-file/file-request % (.getPath compile-dir)))]
-    (fn [req]
-      (or (compile-handler req) (publics-handler req) nil))))
+(defn- watch-css
+  "Given a dist of public filesets, start a watcher that will notify whenever the CSS files change"
+  [public-dist figwheel-system]
+  (let [changes-ch (a/chan 3 (css-changed))]
+    (a/tap public-dist changes-ch)
+    (a/go-loop []
+      (when-let [changes (<! changes-ch)]
+        (let [files (map (fn [f]
+                           {:file f, :type :css})
+                      changes)]
+          (doseq [f files]
+            (println "Arachne Figwheel: Notifying browser of changed CSS file:" (:file f)))
+          (fig-server/send-message figwheel-system ::fig-server/broadcast {:msg-name :css-files-changed
+                                                                           :files files}))
+        (recur)))))
 
-(defrecord FigwheelServer [figwheel-system fsview]
+(defrecord FigwheelServer [fig-system fsview]
   component/Lifecycle
   (start [this]
     (let [inputs (pipeline/input-channels this)
           src-ch (input-by-role this inputs :src)
-          public-ch (input-by-role this inputs :public)
-          fsview (component/start (pipeline/map->FSViewComponent {:inputs [public-ch]}))
+          public-dist (autil/dist (input-by-role this inputs :public))
           src-dir (fs/tmpdir!)
           compile-dir (fs/tmpdir!)
-          handler (build-handler compile-dir fsview)
-          figwheel-cfg (figwheel-cfg-data this src-dir compile-dir handler)
-          figwheel-internal (figwheel-internal-cfg figwheel-cfg)
-          figwheel-system (fig/figwheel-system figwheel-internal)]
+          compile-dist (autil/dist (pipeline/watch-dir compile-dir))
+          serve-ch (pipeline/merge-inputs [(let [ch (a/chan (a/sliding-buffer 1))]
+                                             (a/tap public-dist ch)
+                                             ch)
+                                           (let [ch (a/chan (a/sliding-buffer 1))]
+                                             (a/tap compile-dist ch)
+                                             ch)])
+          fsview (component/start (pipeline/map->FSViewComponent {:inputs [serve-ch]}))
+          handler (fn [req] (aa/ring-response fsview req "/" true))
+          fig-system (component/start (figwheel-system this src-dir compile-dir handler))]
+
+      (when (:arachne.figwheel.server/css? this)
+        (watch-css public-dist fig-system))
 
       ;; continuously copy from source ch to source dir
       (a/go-loop []
@@ -111,11 +151,10 @@
           (fs/commit! fs src-dir)
           (recur)))
 
-      (assoc this :figwheel-system (component/start figwheel-system)
+      (assoc this :fig-system fig-system
                   :fsview fsview)))
   (stop [this]
-    (assoc this :figwheel-system (component/stop figwheel-system)
-                :fsview (component/stop fsview))))
+    (assoc this :fig-system (component/stop fig-system))))
 
 (defn ctor
   "Constructor for a figwheel server component"

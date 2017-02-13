@@ -10,9 +10,10 @@
 
 (s/def ::open-file-command string?)
 (s/def ::port integer?)
+(s/def ::css? boolean?)
 
 (defdsl server
-  "Define a Figwheel server, a component that runs a Figwheel server and is also a consumer in the
+  "Define a Figwheel server, a component that runs a Figwheel server and is also a consumer/producer in the
    asset pipeline.
 
   Argumnents are:
@@ -25,14 +26,21 @@
 
   Currently supported options are:
 
-  - :open-file-command
-  - :port
+  - :open-file-command - Passed through to figwheel.
+  - :port - The port on which to run the Figwheel server
+  - :css? - Set to true if the Figwheel server should automatically reload modified CSS files.
+  Still requires :watch set to true on Input
+
+  Requires inputs to be tagged with either `src` or `public` roles, indicating whether the input
+  is source files ( compilation) or static files that should be merely be served. See the
+  documentation for `arachne.assets.dsl/pipeline` for more information about how to tag roles.
 
   Returns the entity ID of the newly created component."
   (s/cat :arachne-id (s/? ::core/arachne-id)
          :compiler-opts ::cljs/compiler-options
          :opts (u/keys** :opt-un [::open-file-command
-                                  ::port]))
+                                  ::port
+                                  ::css?]))
   [<arachne-id> compiler-opts & opts]
   (let [tid (cfg/tempid)
         entity (u/mkeep {:db/id tid
@@ -40,5 +48,6 @@
                          :arachne.component/constructor :arachne.figwheel.server/ctor
                          :arachne.figwheel.server/compiler-options (cljs/compiler-options (:compiler-opts &args))
                          :arachne.figwheel.server/open-file-command (-> &args :opts second :open-file-command)
+                         :arachne.figwheel.server/css? (-> &args :opts second :css?)
                          :arachne.figwheel.server/port (-> &args :opts second :port)})]
     (script/transact [entity] tid)))

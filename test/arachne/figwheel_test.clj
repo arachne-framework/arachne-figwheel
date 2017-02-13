@@ -14,8 +14,8 @@
   "DSL function to build test config"
   []
 
-  (aa/input-dir :test/src "test")
-  (aa/input-dir :test/public "test/public")
+  (aa/input-dir :test/src "test" :watch? true)
+  (aa/input-dir :test/public "test/public" :watch? true)
 
   (fig/server :test/figwheel
     {:main 'arachne.figwheel.example
@@ -24,6 +24,7 @@
      :asset-path "js"
      :optimizations :none
      :source-map-timestamp true}
+    :css? true
     :port 8888)
 
   (aa/pipeline [:test/src :test/figwheel #{:src}]
@@ -47,7 +48,7 @@
 (comment
 
   (def cfg (arachne/build-config [:org.arachne-framework/arachne-figwheel]
-             '(arachne.figwheel-test/test-config)))
+             `(basic-figwheel-cfg)))
 
   (def rt (rt/init cfg [:arachne/id :test/rt]))
 

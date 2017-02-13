@@ -12,20 +12,6 @@
       (m/attr :arachne.figwheel.server/open-file-command :one-or-none :string
         "The command-line program used to launch a source code editor when it is clicked on in the Figwheel UI")
       (m/attr :arachne.figwheel.server/compiler-options :one :component :arachne.cljs/CompilerOptions
-        "The ClojureScript compiller options to use for the build."))))
-
-(comment
-  ;; Proposed API
-
-  ;; minimal
-  (figwheel/server :my/figwheel
-    :compiler-options {:main 'foo.bar})
-
-  ;; with full options
-  (figwheel/server :my/figwheel
-    :port 3449
-
-    :open-file-command "emacsclient"
-    :compiler-options {:main 'foo.bar})
-
-  )
+        "The ClojureScript compiller options to use for the build.")
+      (m/attr :arachne.figwheel.server/css? :one-or-none :boolean
+        "Indicate whether the figwheel server should automatially watch for changed CSS files as well."))))
