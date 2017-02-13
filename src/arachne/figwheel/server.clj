@@ -1,5 +1,6 @@
 (ns arachne.figwheel.server
   (:require [clojure.spec :as s]
+            [arachne.log :as log]
             [arachne.error :as e :refer [deferror error]]
             [arachne.core.config :as cfg]
             [arachne.core.util :as u]
@@ -85,9 +86,6 @@
       1 (first chans)
       (pipeline/merge-inputs chans))))
 
-;; TODO: make Figwheel a producer
-;; expose compile-dist for consumption
-
 (defn css-changed
   "Return a transducer that only passes through modified CSS files"
   []
@@ -123,7 +121,19 @@
                                                                            :files files}))
         (recur)))))
 
-(defrecord FigwheelServer [fig-system fsview]
+(defn- has-file?
+  "Return a predicate to test if a fileset contains the specified file"
+  [filename]
+  (fn [fs] (contains? (:tree fs) filename)))
+
+(defn- cljs-output-to
+  "Get the output-to value from the ClojureScript compiler options"
+  [entity-map]
+  (-> entity-map ::compiler-options :arachne.cljs.compiler-options/output-to))
+
+(defrecord FigwheelServer [fig-system fsview-atom dist]
+  pipeline/Producer
+  (-observe [_] (a/tap dist (a/chan (a/sliding-buffer 1))))
   component/Lifecycle
   (start [this]
     (let [inputs (pipeline/input-channels this)
@@ -131,16 +141,20 @@
           public-dist (autil/dist (input-by-role this inputs :public))
           src-dir (fs/tmpdir!)
           compile-dir (fs/tmpdir!)
-          compile-dist (autil/dist (pipeline/watch-dir compile-dir))
-          serve-ch (pipeline/merge-inputs [(let [ch (a/chan (a/sliding-buffer 1))]
-                                             (a/tap public-dist ch)
-                                             ch)
-                                           (let [ch (a/chan (a/sliding-buffer 1))]
-                                             (a/tap compile-dist ch)
-                                             ch)])
-          fsview (component/start (pipeline/map->FSViewComponent {:inputs [serve-ch]}))
-          handler (fn [req] (aa/ring-response fsview req "/" true))
-          fig-system (component/start (figwheel-system this src-dir compile-dir handler))]
+          compile-ch (pipeline/watch-dir compile-dir (a/chan (a/sliding-buffer 1)
+                                                       (filter (has-file? (cljs-output-to this)))))
+          ;; use an atom so we can avoid a deadlock: the fsview can't start until there is output in the compile-dir,
+          ;; but the compile-dir can't be populated until Figwheel finishes its compile
+          fsview-atom (atom nil)
+          handler (fn [req]
+                    (when-let [fsview @fsview-atom]
+                      (aa/ring-response fsview req "/" true)))
+          fig-system (component/start (figwheel-system this src-dir compile-dir handler))
+
+          compile-dist (autil/dist compile-ch)
+          serve-ch (pipeline/merge-inputs
+                     [(a/tap public-dist (a/chan (a/sliding-buffer 1)))
+                      (a/tap compile-dist (a/chan (a/sliding-buffer 1)))])]
 
       (when (:arachne.figwheel.server/css? this)
         (watch-css public-dist fig-system))
@@ -151,8 +165,11 @@
           (fs/commit! fs src-dir)
           (recur)))
 
+      (reset! fsview-atom (component/start (pipeline/map->FSViewComponent {:inputs [serve-ch]})))
+
       (assoc this :fig-system fig-system
-                  :fsview fsview)))
+                  :dist compile-dist
+                  :fsview-atom fsview-atom)))
   (stop [this]
     (assoc this :fig-system (component/stop fig-system))))
 
