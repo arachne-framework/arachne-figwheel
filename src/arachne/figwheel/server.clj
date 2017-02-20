@@ -190,7 +190,7 @@
 
       (assoc this :fsview (swap! fsview component/start)
                   :fig-system fig-system
-                  :dist nil)))
+                  :dist compile-dist)))
   (stop [this]
     (assoc this
        :fsview (component/stop fsview)
