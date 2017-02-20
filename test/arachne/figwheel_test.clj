@@ -16,7 +16,7 @@
   "DSL function to build test config"
   [output-dir]
 
-  (aa/input-dir :test/src "test" :watch? false)
+  (aa/input-dir :test/src "test" :watch? true)
   (aa/input-dir :test/public "test/public" :watch? false)
 
   (fig/server :test/figwheel
@@ -63,16 +63,16 @@
 
 (comment
 
-  (def cfg (arachne/build-config [:org.arachne-framework/arachne-figwheel]
-             `(basic-figwheel-cfg)))
+  (def rt (atom nil))
 
-  (def rt (rt/init cfg [:arachne/id :test/rt]))
+  (defn restart []
+    (when @rt (component/stop @rt))
+    (let [cfg (arachne/build-config [:org.arachne-framework/arachne-figwheel]
+                `(basic-figwheel-cfg nil))]
+      (reset! rt (component/start (rt/init cfg [:arachne/id :test/rt])))))
 
-  (def rt (component/start rt))
-
-  (def rt (component/stop rt))
-
-  (afig/repl rt)
+  (restart)
+  (swap! rt component/stop)
 
   )
 

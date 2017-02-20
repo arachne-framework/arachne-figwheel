@@ -3,7 +3,7 @@
  :description "Figwheel Arachne module"
  :license {"Apache Software License 2.0" "http://www.apache.org/licenses/LICENSE-2.0"}
  :deps [[org.clojure/clojure "1.9.0-alpha14" :scope "provided"]
-        [org.arachne-framework/arachne-cljs "0.1.0-master-0023-c7c7785"]
+        [org.arachne-framework/arachne-cljs "0.1.0-master-0024-a076e80"]
         [figwheel-sidecar "0.5.9-SNAPSHOT" :exclusions [org.clojure/clojurescript
                                                         org.clojure/clojure
                                                         org.clojure/core.async

@@ -13,6 +13,11 @@
             [figwheel-sidecar.system :as fig]
             [figwheel-sidecar.config :as fig-cfg]
             [figwheel-sidecar.components.figwheel-server :as fig-server]
+            [figwheel-sidecar.components.cljs-autobuild :as cljs-autobuild]
+            [figwheel-sidecar.build-middleware.injection :as injection]
+            [figwheel-sidecar.build-middleware.notifications :as notifications]
+            [figwheel-sidecar.build-middleware.clj-reloading :as clj-reloading]
+            [figwheel-sidecar.build-middleware.javascript-reloading :as javascript-reloading]
             [clojure.core.async :as a :refer [go go-loop >! <! <!! >!!]]
             [ring.middleware.file-info :as file-info]
             [ring.middleware.file :as ring-file])
@@ -21,13 +26,14 @@
 (defn- figwheel-cfg-data
   "Extract Figwheel configuration data from the Arachne config, returning it in the Figwheel
    format (the same as would be used by by figwheel.edn)"
-  [entity src-dir compile-dir handler]
+  [entity src-dir compile-dir handler build-fn]
   (let [compiler-options (cljs/compiler-options (::compiler-options entity) compile-dir)
         build {:id "figwheel-build"
                :source-paths [(.getPath src-dir)]
                :figwheel true
                :compiler compiler-options}
         fig-cfg (u/map-transform entity {:builds [build]
+                                         :cljs-build-fn build-fn
                                          :validate-config false
                                          :resolved-ring-handler handler
                                          :http-server-root (.getPath compile-dir)}
@@ -44,8 +50,8 @@
 
 (defn- figwheel-system
   "Return an unstarted Figwheel system based on the provided cfg"
-  [entity src-dir compile-dir handler]
-  (-> (figwheel-cfg-data entity src-dir compile-dir handler)
+  [entity src-dir compile-dir handler build-fn]
+  (-> (figwheel-cfg-data entity src-dir compile-dir handler build-fn)
     (figwheel-internal-cfg)
     (fig/figwheel-system)))
 
@@ -121,17 +127,23 @@
                                                                            :files files}))
         (recur)))))
 
-(defn- has-file?
-  "Return a predicate to test if a fileset contains the specified file"
-  [filename]
-  (fn [fs] (contains? (:tree fs) filename)))
+(defn- construct-build-fn
+  "Return Figwheel's :cljs-build-fn, adding the specified middleware right inside notification."
+  [middleware]
+  (-> cljs-autobuild/cljs-build
+    injection/hook
+    cljs-autobuild/notify-command-hook
+    cljs-autobuild/figwheel-start-and-end-messages
+    middleware
+    notifications/hook
+    ;; the following two hooks have to be called before the notifications
+    ;; a they modify the message on the way down
+    clj-reloading/hook
+    javascript-reloading/hook
+    cljs-autobuild/color-output))
 
-(defn- cljs-output-to
-  "Get the output-to value from the ClojureScript compiler options"
-  [entity-map]
-  (-> entity-map ::compiler-options :arachne.cljs.compiler-options/output-to))
 
-(defrecord FigwheelServer [fig-system fsview-atom dist]
+(defrecord FigwheelServer [fig-system fsview dist]
   pipeline/Producer
   (-observe [_] (a/tap dist (a/chan (a/sliding-buffer 1))))
   component/Lifecycle
@@ -141,20 +153,31 @@
           public-dist (autil/dist (input-by-role this inputs :public))
           src-dir (fs/tmpdir!)
           compile-dir (fs/tmpdir!)
-          compile-ch (pipeline/watch-dir compile-dir (a/chan (a/sliding-buffer 1)
-                                                       (filter (has-file? (cljs-output-to this)))))
-          ;; use an atom so we can avoid a deadlock: the fsview can't start until there is output in the compile-dir,
-          ;; but the compile-dir can't be populated until Figwheel finishes its compile
-          fsview-atom (atom nil)
-          handler (fn [req]
-                    (when-let [fsview @fsview-atom]
-                      (aa/ring-response fsview req "/" true)))
-          fig-system (component/start (figwheel-system this src-dir compile-dir handler))
-
+          compile-ch (a/chan (a/sliding-buffer 1))
           compile-dist (autil/dist compile-ch)
-          serve-ch (pipeline/merge-inputs
-                     [(a/tap public-dist (a/chan (a/sliding-buffer 1)))
-                      (a/tap compile-dist (a/chan (a/sliding-buffer 1)))])]
+          fsview (atom (pipeline/map->FSViewComponent
+                         {:inputs [(a/tap public-dist (a/chan (a/sliding-buffer 1)))
+                                   (a/tap compile-dist (a/chan (a/sliding-buffer 1)))]}))
+          handler (fn [req]
+                    (let [fsview @fsview]
+                      (when (:state fsview)
+                        (aa/ring-response fsview req "/" true))))
+
+          middleware (fn [build-fn]
+                       (fn [build-state]
+                         (let [next-state (build-fn build-state)
+                               fs (fs/add (fs/fileset) compile-dir)]
+                           ;; Blocking put... several times
+                           ;; This is hacky, but greatly reduces the chance that the page
+                           ;; attempts to refresh before the new files are erady to be served.
+                           ;; Because of how core.async works, strict coordination is impossible.
+                           ;; It doesn't really hurt preformance
+                           (dotimes [_ 5]
+                             (a/>!! compile-ch fs))
+                           next-state)))
+
+          build-fn (construct-build-fn middleware)
+          fig-system (component/start (figwheel-system this src-dir compile-dir handler build-fn))]
 
       (when (:arachne.figwheel.server/css? this)
         (watch-css public-dist fig-system))
@@ -165,13 +188,13 @@
           (fs/commit! fs src-dir)
           (recur)))
 
-      (reset! fsview-atom (component/start (pipeline/map->FSViewComponent {:inputs [serve-ch]})))
-
-      (assoc this :fig-system fig-system
-                  :dist compile-dist
-                  :fsview-atom fsview-atom)))
+      (assoc this :fsview (swap! fsview component/start)
+                  :fig-system fig-system
+                  :dist nil)))
   (stop [this]
-    (assoc this :fig-system (component/stop fig-system))))
+    (assoc this
+       :fsview (component/stop fsview)
+       :fig-system (component/stop fig-system))))
 
 (defn ctor
   "Constructor for a figwheel server component"

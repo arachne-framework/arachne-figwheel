@@ -1,4 +1,4 @@
-<configuration debug="false">
+<configuration debug="false" scan="true">
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
@@ -9,5 +9,8 @@
   <root level="WARN">
       <appender-ref ref="STDOUT"/>
   </root>
+
+  <logger name="arachne.assets.pipeline" level="TRACE"/>
+  <logger name="arachne.figwheel.server" level="TRACE"/>
 
 </configuration>
