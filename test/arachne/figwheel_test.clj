@@ -74,6 +74,10 @@
   (restart)
   (swap! rt component/stop)
 
+  (require '[arachne.figwheel :as figwheel])
+
+  (figwheel/repl @rt)
+
   )
 
 (comment
