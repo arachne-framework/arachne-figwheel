@@ -16,28 +16,28 @@
   "DSL function to build test config"
   [output-dir]
 
-  (aa/input-dir :test/src "test" :watch? true)
-  (aa/input-dir :test/public "test/public" :watch? false)
+  (a/id :test/src (aa/input-dir "test" :watch? true))
+  (a/id :test/public (aa/input-dir "test/public" :watch? false))
 
-  (fig/server :test/figwheel
-    {:main 'arachne.figwheel.example
-     :output-to "js/example.js"
-     :output-dir "js"
-     :asset-path "js"
-     :optimizations :none
-     :source-map-timestamp true}
-    :port 8888)
+  (a/id :test/figwheel
+    (fig/server {:main 'arachne.figwheel.example
+                 :output-to "js/example.js"
+                 :output-dir "js"
+                 :asset-path "js"
+                 :optimizations :none
+                 :source-map-timestamp true}
+      :port 8888))
 
   (aa/pipeline [:test/src :test/figwheel #{:src}]
                [:test/public :test/figwheel #{:public}])
 
   (when output-dir
-    (aa/output-dir :test/output output-dir)
+    (a/id :test/output (aa/output-dir output-dir))
     (aa/pipeline [:test/figwheel :test/output]))
 
-  (if output-dir
-    (a/runtime :test/rt [:test/output])
-    (a/runtime :test/rt [:test/figwheel])))
+  (a/id :test/rt (if output-dir
+                   (a/runtime [:test/output])
+                   (a/runtime [:test/figwheel]))))
 
 (deftest ^:integration basic-figwheel
   (let [cfg (arachne/build-config [:org.arachne-framework/arachne-figwheel]

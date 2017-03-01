@@ -18,7 +18,6 @@
 
   Argumnents are:
 
-  - arachne-id (optional): The Arachne ID of the component
   - compiler (mandatory): A ClojureScript compiler options map. See the ClojureScript documentation for
     possible values. The only difference is that options which specify paths (:output-to, :output-dir,
     :preamble, :externs, etc.) will relative to the asset fileset rather than the process as a whole.
@@ -36,15 +35,13 @@
   documentation for `arachne.assets.dsl/pipeline` for more information about how to tag roles.
 
   Returns the entity ID of the newly created component."
-  (s/cat :arachne-id (s/? ::core/arachne-id)
-         :compiler-opts ::cljs/compiler-options
+  (s/cat :compiler-opts ::cljs/compiler-options
          :opts (u/keys** :opt-un [::open-file-command
                                   ::port
                                   ::css?]))
-  [<arachne-id> compiler-opts & opts]
+  [compiler-opts & opts]
   (let [tid (cfg/tempid)
         entity (u/mkeep {:db/id tid
-                         :arachne/id (:arachne-id &args)
                          :arachne.component/constructor :arachne.figwheel.server/ctor
                          :arachne.figwheel.server/compiler-options (cljs/compiler-options (:compiler-opts &args))
                          :arachne.figwheel.server/open-file-command (-> &args :opts second :open-file-command)
