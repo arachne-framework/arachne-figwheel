@@ -14,4 +14,6 @@
       (m/attr :arachne.figwheel.server/compiler-options :one :component :arachne.cljs/CompilerOptions
         "The ClojureScript compiller options to use for the build.")
       (m/attr :arachne.figwheel.server/css? :one-or-none :boolean
-        "Indicate whether the figwheel server should automatially watch for changed CSS files as well."))))
+        "Indicate whether the figwheel server should automatially watch for changed CSS files as well.")
+      (m/attr :arachne.figwheel.server/on-jsload :one-or-none :keyword
+        "The fully-qualified name of a client-side function that will be invoked after Figwheel reload's the page's code."))))

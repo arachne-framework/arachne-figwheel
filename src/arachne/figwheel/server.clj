@@ -30,7 +30,9 @@
   (let [compiler-options (cljs/compiler-options (::compiler-options entity) compile-dir)
         build {:id "figwheel-build"
                :source-paths [(.getPath src-dir)]
-               :figwheel true
+               :figwheel (if-let [on-jsload (:arachne.figwheel.server/on-jsload entity)]
+                           {:on-jsload (.substring (str on-jsload) 1)}
+                           true)
                :compiler compiler-options}
         fig-cfg (u/map-transform entity {:builds [build]
                                          :cljs-build-fn build-fn

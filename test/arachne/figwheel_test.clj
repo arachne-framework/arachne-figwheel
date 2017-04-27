@@ -17,7 +17,7 @@
   [output-dir]
 
   (a/id :test/src (aa/input-dir "test" :watch? true))
-  (a/id :test/public (aa/input-dir "test/public" :watch? false))
+  (a/id :test/public (aa/input-dir "test/public" :watch? true))
 
   (a/id :test/figwheel
     (fig/server {:main 'arachne.figwheel.example
@@ -26,7 +26,9 @@
                  :asset-path "js"
                  :optimizations :none
                  :source-map-timestamp true}
-      :port 8888))
+      :on-jsload 'arachne.figwheel.example/reload-hook
+      :port 8888
+      :css? true))
 
   (aa/pipeline [:test/src :test/figwheel #{:src}]
                [:test/public :test/figwheel #{:public}])

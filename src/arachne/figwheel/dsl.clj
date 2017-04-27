@@ -11,6 +11,7 @@
 (s/def ::open-file-command string?)
 (s/def ::port integer?)
 (s/def ::css? boolean?)
+(s/def ::on-jsload qualified-symbol?)
 
 (defdsl server
   "Define a Figwheel server, a component that runs a Figwheel server and is also a consumer/producer in the
@@ -28,7 +29,9 @@
   - :open-file-command - Passed through to figwheel.
   - :port - The port on which to run the Figwheel server
   - :css? - Set to true if the Figwheel server should automatically reload modified CSS files.
-  Still requires :watch set to true on Input
+    Still requires :watch set to true on Input
+  - :on-jsload - A fully-qualified symbol identifiying a client-side function
+    that will be called after Figwheel reloads the page's Javascript code.
 
   Requires inputs to be tagged with either `src` or `public` roles, indicating whether the input
   is source files ( compilation) or static files that should be merely be served. See the
@@ -38,7 +41,8 @@
   (s/cat :compiler-opts ::cljs/compiler-options
          :opts (u/keys** :opt-un [::open-file-command
                                   ::port
-                                  ::css?]))
+                                  ::css?
+                                  ::on-jsload]))
   [compiler-opts & opts]
   (let [tid (cfg/tempid)
         entity (u/mkeep {:db/id tid
@@ -46,5 +50,6 @@
                          :arachne.figwheel.server/compiler-options (cljs/compiler-options (:compiler-opts &args))
                          :arachne.figwheel.server/open-file-command (-> &args :opts second :open-file-command)
                          :arachne.figwheel.server/css? (-> &args :opts second :css?)
-                         :arachne.figwheel.server/port (-> &args :opts second :port)})]
+                         :arachne.figwheel.server/port (-> &args :opts second :port)
+                         :arachne.figwheel.server/on-jsload (-> &args :opts second :on-jsload keyword)})]
     (script/transact [entity] tid)))
