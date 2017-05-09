@@ -1,5 +1,5 @@
 (ns arachne.figwheel.server
-  (:require [clojure.spec :as s]
+  (:require [clojure.spec.alpha :as s]
             [arachne.log :as log]
             [arachne.error :as e :refer [deferror error]]
             [arachne.core.config :as cfg]
